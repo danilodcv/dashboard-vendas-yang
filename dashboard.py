@@ -14,38 +14,38 @@ def formatar_moeda(valor):
     """Formata um número para o padrão de moeda brasileira (R$ 1.234,56)."""
     try:
         valor_float = float(valor)
+        # Formata o número com separador de milhar e duas casas decimais
         valor_formatado_us = f"{valor_float:,.2f}"
+        # Inverte os separadores para o padrão brasileiro
         valor_formatado_br = valor_formatado_us.replace(",", "X").replace(".", ",").replace("X", ".")
         return f"R$ {valor_formatado_br}"
     except (ValueError, TypeError):
         return "R$ 0,00"
 
-def limpar_coluna_numerica(df, nome_coluna):
-    """Converte uma coluna para tipo numérico, tratando separadores brasileiros."""
-    if nome_coluna in df.columns:
-        # Garante que a coluna seja tratada como texto para manipulação
-        df[nome_coluna] = df[nome_coluna].astype(str)
-        # Remove separadores de milhar (ponto) e substitui vírgula decimal por ponto
-        df[nome_coluna] = df[nome_coluna].str.replace('.', '', regex=False).str.replace(',', '.')
-        # Converte para numérico, tratando erros e preenchendo Nulos com 0
-        df[nome_coluna] = pd.to_numeric(df[nome_coluna], errors='coerce').fillna(0)
-    return df
-
 # --- Carregamento e Cache de Dados ---
 @st.cache_data
 def carregar_dados():
     """
-    Carrega os dados e calcula o valor total do produto para garantir a precisão.
+    Carrega, limpa os dados da planilha e garante a precisão dos cálculos.
     """
     try:
         df = pd.read_excel("vendas.xlsx")
         df['emissao'] = pd.to_datetime(df['emissao'], dayfirst=True, errors='coerce')
         df.dropna(subset=['emissao'], inplace=True)
         
-        # --- Limpeza e Cálculo Robusto do Valor Total ---
-        df = limpar_coluna_numerica(df, 'quantidade')
-        df = limpar_coluna_numerica(df, 'vlr_unitario')
-        df = limpar_coluna_numerica(df, 'vlr_final')
+        # --- Limpeza Robusta das Colunas de Valor ---
+        colunas_valor = ['quantidade', 'vlr_unitario', 'vlr_final']
+        for coluna in colunas_valor:
+            if coluna in df.columns:
+                # Só executa a limpeza se a coluna não for numérica (for texto/objeto)
+                if not pd.api.types.is_numeric_dtype(df[coluna]):
+                    # Converte para string para garantir que os métodos de string funcionem
+                    df[coluna] = df[coluna].astype(str)
+                    # Remove o separador de milhar (ponto) e troca a vírgula decimal por ponto
+                    df[coluna] = df[coluna].str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                
+                # Converte para numérico, tratando erros e preenchendo Nulos com 0
+                df[coluna] = pd.to_numeric(df[coluna], errors='coerce').fillna(0)
 
         # Recalcula a coluna 'vlr_total_produto' para garantir a precisão.
         df['vlr_total_produto'] = df['quantidade'] * df['vlr_unitario']
