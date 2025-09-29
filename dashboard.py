@@ -5,7 +5,7 @@ import pandas as pd
 # Define o título que aparece na aba do navegador e o layout.
 st.set_page_config(
     page_title="Histórico de Vendas - 2023 a 2025",
-    page_icon="📊",
+    page_icon="🔎",
     layout="wide"
 )
 
