@@ -13,12 +13,13 @@ st.set_page_config(
 def formatar_moeda(valor):
     """Formata um número para o padrão de moeda brasileira (R$ 1.234,56)."""
     try:
-        # Separa a parte inteira da decimal
-        inteiro = int(valor)
-        decimal = int(round((valor - inteiro) * 100))
-        # Formata a parte inteira com separadores de milhar (ponto)
-        inteiro_formatado = f"{inteiro:,}".replace(",", ".")
-        return f"R$ {inteiro_formatado},{decimal:02d}"
+        # Formata o número com 2 casas decimais, garantindo que seja um float
+        valor_float = float(valor)
+        # Usa uma formatação que separa milhares com vírgula e decimal com ponto (padrão US)
+        valor_formatado_us = f"{valor_float:,.2f}"
+        # Inverte os separadores para o padrão brasileiro
+        valor_formatado_br = valor_formatado_us.replace(",", "X").replace(".", ",").replace("X", ".")
+        return f"R$ {valor_formatado_br}"
     except (ValueError, TypeError):
         return "R$ 0,00"
 
@@ -32,8 +33,13 @@ def carregar_dados():
     try:
         df = pd.read_excel("vendas.xlsx")
         df['emissao'] = pd.to_datetime(df['emissao'], dayfirst=True, errors='coerce')
-        # Garante que a coluna de valor seja numérica, tratando erros e preenchendo Nulos com 0
+        
+        # Trata a coluna de valor para o formato numérico correto
+        if 'vlr_total_produto' in df.columns and df['vlr_total_produto'].dtype == 'object':
+             df['vlr_total_produto'] = df['vlr_total_produto'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.')
+
         df['vlr_total_produto'] = pd.to_numeric(df['vlr_total_produto'], errors='coerce').fillna(0)
+        
         df.dropna(subset=['emissao'], inplace=True)
         df['codigo'] = df['codigo'].astype(str)
         return df
@@ -79,17 +85,15 @@ if df_original is not None:
     # --- Aplicação dos Filtros ---
     df_filtrado = df_original.copy()
 
-    # Aplica filtro de data se não for "todo o período"
     if not todo_periodo:
         if data_inicial > data_final:
             st.sidebar.error("A data inicial não pode ser maior que a data final.")
-            st.stop() # Interrompe a execução se as datas forem inválidas
+            st.stop()
         else:
             data_inicial_ts = pd.to_datetime(data_inicial)
             data_final_ts = pd.to_datetime(data_final)
             df_filtrado = df_filtrado[(df_filtrado['emissao'] >= data_inicial_ts) & (df_filtrado['emissao'] <= data_final_ts)]
 
-    # Aplica filtro de código se não for "Todos os Códigos"
     if codigo_selecionado != "Todos os Códigos":
         df_filtrado = df_filtrado[df_filtrado['codigo'] == codigo_selecionado]
 
@@ -97,48 +101,44 @@ if df_original is not None:
     st.title("📈 Dashboard Analítico de Vendas")
     st.markdown("---")
 
-    # --- Exibição dos Resultados ---
     if df_filtrado.empty:
         st.warning("Nenhum dado encontrado para os filtros selecionados.")
     else:
-        # --- Quadro de Resumo (Métricas) ---
         st.subheader("Resumo do Período Filtrado")
         total_vendas = df_filtrado['vlr_total_produto'].sum()
-        num_pedidos = df_filtrado['pedido'].nunique() # Conta pedidos únicos
+        num_pedidos = df_filtrado['pedido'].nunique()
 
         col1, col2 = st.columns(2)
-        # CORREÇÃO: Utilizando a função auxiliar para formatar a moeda
-        valor_formatado = formatar_moeda(total_vendas)
-        col1.metric("Valor Total das Vendas", valor_formatado)
+        
+        col1.metric("Valor Total das Vendas", formatar_moeda(total_vendas))
         col2.metric("Quantidade de Pedidos", f"{num_pedidos}")
         
         st.markdown("---")
         
-        # --- Tabela de Detalhes ---
         st.subheader("Detalhes das Vendas")
         
         colunas_mostrar = ['pedido', 'emissao', 'cliente', 'codigo', 'produto', 'vlr_total_produto']
         colunas_existentes = [col for col in colunas_mostrar if col in df_filtrado.columns]
 
-        df_display = df_filtrado[colunas_existentes].rename(columns={
+        df_ordenado = df_filtrado.sort_values(by="emissao", ascending=False)
+        
+        df_display = df_ordenado[colunas_existentes].rename(columns={
             'pedido': 'Nº Pedido',
             'emissao': 'Data da Venda',
             'cliente': 'Cliente',
             'codigo': 'Código',
             'produto': 'Produto',
-            'vlr_total_produto': 'Valor Total (R$)'
+            'vlr_total_produto': 'Valor Total'
         })
         
         df_display['Data da Venda'] = df_display['Data da Venda'].dt.strftime('%d/%m/%Y')
         
-        # Formata a coluna de valor para exibição na tabela
-        df_display['Valor Total (R$)'] = df_display['Valor Total (R$)'].apply(lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        df_display['Valor Total'] = df_display['Valor Total'].apply(formatar_moeda)
 
-        st.dataframe(df_display.sort_values(by="Data da Venda", ascending=False), use_container_width=True, hide_index=True)
+        st.dataframe(df_display, use_container_width=True, hide_index=True)
 
     st.markdown("\n\n---\n\n")
 
-    # --- Consulta por Cliente (mantida como funcionalidade separada) ---
     st.subheader("Consulta Rápida por Cliente")
     NOME_DA_COLUNA_CLIENTES = 'cliente'
 
