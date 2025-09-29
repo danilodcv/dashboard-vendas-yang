@@ -9,6 +9,19 @@ st.set_page_config(
     layout="wide"
 )
 
+# --- Funções Auxiliares ---
+def formatar_moeda(valor):
+    """Formata um número para o padrão de moeda brasileira (R$ 1.234,56)."""
+    try:
+        # Separa a parte inteira da decimal
+        inteiro = int(valor)
+        decimal = int(round((valor - inteiro) * 100))
+        # Formata a parte inteira com separadores de milhar (ponto)
+        inteiro_formatado = f"{inteiro:,}".replace(",", ".")
+        return f"R$ {inteiro_formatado},{decimal:02d}"
+    except (ValueError, TypeError):
+        return "R$ 0,00"
+
 # --- Carregamento e Cache de Dados ---
 @st.cache_data
 def carregar_dados():
@@ -94,8 +107,8 @@ if df_original is not None:
         num_pedidos = df_filtrado['pedido'].nunique() # Conta pedidos únicos
 
         col1, col2 = st.columns(2)
-        # CORREÇÃO: Lógica de formatação mais robusta para moeda brasileira.
-        valor_formatado = f"R$ {total_vendas:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        # CORREÇÃO: Utilizando a função auxiliar para formatar a moeda
+        valor_formatado = formatar_moeda(total_vendas)
         col1.metric("Valor Total das Vendas", valor_formatado)
         col2.metric("Quantidade de Pedidos", f"{num_pedidos}")
         
@@ -118,6 +131,9 @@ if df_original is not None:
         
         df_display['Data da Venda'] = df_display['Data da Venda'].dt.strftime('%d/%m/%Y')
         
+        # Formata a coluna de valor para exibição na tabela
+        df_display['Valor Total (R$)'] = df_display['Valor Total (R$)'].apply(lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
         st.dataframe(df_display.sort_values(by="Data da Venda", ascending=False), use_container_width=True, hide_index=True)
 
     st.markdown("\n\n---\n\n")
@@ -134,7 +150,6 @@ if df_original is not None:
 
             if not compras_cliente.empty:
                 st.success(f"🔍 Exibindo compras para clientes contendo '{cliente_pesquisado}':")
-                # ... (código da consulta por cliente, se desejar manter)
                 st.dataframe(compras_cliente, use_container_width=True, hide_index=True)
             else:
                 st.warning("Nenhum cliente encontrado com este nome.")
