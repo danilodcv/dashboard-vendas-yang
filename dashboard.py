@@ -13,14 +13,16 @@ st.set_page_config(
 def carregar_dados():
     """
     Função para carregar os dados da planilha 'vendas.xlsx'.
-    Trata a coluna de data para garantir que seja do tipo datetime.
+    Trata a coluna de data para garantir que seja do tipo datetime,
+    interpretando o formato brasileiro (dia/mês/ano).
     """
     try:
         df = pd.read_excel("vendas.xlsx")
         # Mantém a coluna original para diagnóstico
         df['emissao_original'] = df['emissao']
         # Converte a coluna 'emissao' para o formato de data, tratando possíveis erros.
-        df['emissao'] = pd.to_datetime(df['emissao'], errors='coerce')
+        # AQUI ESTÁ A CORREÇÃO: dayfirst=True informa ao pandas para ler o formato DD/MM/YYYY.
+        df['emissao'] = pd.to_datetime(df['emissao'], dayfirst=True, errors='coerce')
         return df
     except FileNotFoundError:
         st.error("O arquivo 'vendas.xlsx' não foi encontrado. Por favor, coloque-o na mesma pasta do script.")
@@ -46,7 +48,7 @@ if df is not None:
     st.title("📊 Consulta de Vendas - YANG Molduras")
     st.markdown("---")
 
-    # --- NOVO: Ferramenta de Diagnóstico de Datas ---
+    # --- Ferramenta de Diagnóstico de Datas ---
     st.sidebar.markdown("### Ferramentas de Análise")
     with st.sidebar.expander("Clique para Diagnóstico de Datas"):
         st.info("Esta seção ajuda a encontrar linhas com datas inválidas na sua planilha.")
