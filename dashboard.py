@@ -93,6 +93,7 @@ if df is not None:
                     'pedido': 'Nº Pedido',
                     NOME_DA_COLUNA_CLIENTES: 'Cliente',
                     'emissao': 'Data da Compra',
+                    'codigo': 'Código Interno",
                     'produto': 'Produto',
                     'quantidade': 'Qtd.',
                     'vlr_unitario': 'Valor Unitário (R$)',
