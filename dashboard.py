@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import math
 from babel.numbers import format_currency
 
 # --- Configuração da Página ---
@@ -15,18 +16,20 @@ def formatar_moeda(valor):
     """Formata um número para o padrão de moeda brasileira (R$ 1.234,56) usando Babel."""
     return format_currency(valor, 'BRL', locale='pt_BR')
 
-def converter_para_float(valor):
-    """Converte um valor (possivelmente string no formato pt-BR) para float de forma segura."""
-    if isinstance(valor, str):
-        # Remove pontos de milhar, substitui vírgula decimal por ponto
-        valor_limpo = valor.replace('.', '').replace(',', '.')
-        try:
-            return float(valor_limpo)
-        except (ValueError, TypeError):
-            return 0.0  # Retorna 0 se a conversão falhar
-    elif isinstance(valor, (int, float)):
-        return float(valor)  # Retorna o valor se já for numérico
-    return 0.0  # Retorna 0 para outros tipos inesperados
+def parse_ptbr(x):
+    """Converte uma string no formato pt-BR para float de forma segura."""
+    if x is None or (isinstance(x, float) and math.isnan(x)):
+        return 0.0
+    if isinstance(x, (int, float)):
+        return float(x)
+    s = str(x).strip()
+    if s == "":
+        return 0.0
+    s = s.replace(".", "").replace(",", ".")
+    try:
+        return float(s)
+    except Exception:
+        return 0.0
 
 # --- Carregamento e Cache de Dados ---
 @st.cache_data
@@ -36,28 +39,21 @@ def carregar_dados():
     numéricos brasileiros diretamente na leitura.
     """
     try:
-        colunas_para_converter = {
-            'quantidade': converter_para_float,
-            'vlr_unitario': converter_para_float,
-            'vlr_final': converter_para_float
-        }
-        
         df = pd.read_excel(
             "vendas.xlsx",
-            converters=colunas_para_converter
+            converters={
+                'quantidade': parse_ptbr,
+                'vlr_unitario': parse_ptbr,
+                'vlr_final': parse_ptbr,
+            }
         )
-        
+
         df['emissao'] = pd.to_datetime(df['emissao'], dayfirst=True, errors='coerce')
         df.dropna(subset=['emissao'], inplace=True)
-        
-        # Garante que as colunas de valor que não foram convertidas sejam numéricas
-        for col in ['quantidade', 'vlr_unitario', 'vlr_final']:
-             if col not in colunas_para_converter and col in df.columns:
-                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
         # Recalcula o valor total para garantir consistência
-        df['vlr_total_produto'] = df['quantidade'] * df['vlr_unitario']
-            
+        df['vlr_total_produto'] = df.get('quantidade', 0) * df.get('vlr_unitario', 0)
+
         df['codigo'] = df['codigo'].astype(str)
         return df
     except FileNotFoundError:
@@ -71,7 +67,6 @@ df_original = carregar_dados()
 
 # --- Interface Principal ---
 if df_original is not None:
-    # --- Barra Lateral com Logo e Filtros Unificados ---
     st.sidebar.title("YANG Molduras")
     try:
         st.sidebar.image("sua_logo.png", use_container_width=True)
@@ -81,7 +76,6 @@ if df_original is not None:
     st.sidebar.markdown("---")
     st.sidebar.header("Filtros de Vendas")
 
-    # --- Filtro de Período ---
     todo_periodo = st.sidebar.checkbox("Analisar todo o período", value=True)
     
     min_date = df_original['emissao'].min().date()
@@ -94,12 +88,10 @@ if df_original is not None:
         data_inicial = st.sidebar.date_input("Data Inicial", min_date, min_value=min_date, max_value=max_date)
         data_final = st.sidebar.date_input("Data Final", max_date, min_value=min_date, max_value=max_date)
 
-    # --- Filtro de Código do Produto ---
     lista_codigos = sorted(df_original['codigo'].unique())
     lista_codigos.insert(0, "Todos os Códigos")
     codigo_selecionado = st.sidebar.selectbox("Código do Produto:", options=lista_codigos)
 
-    # --- Aplicação dos Filtros ---
     df_filtrado = df_original.copy()
     
     if not todo_periodo:
@@ -107,15 +99,11 @@ if df_original is not None:
             st.sidebar.error("A data inicial não pode ser maior que a data final.")
             st.stop()
         else:
-            data_inicial_ts = pd.to_datetime(data_inicial)
-            data_final_ts = pd.to_datetime(data_final)
             df_filtrado = df_filtrado[df_filtrado['emissao'].dt.date.between(data_inicial, data_final, inclusive='both')]
-
 
     if codigo_selecionado != "Todos os Códigos":
         df_filtrado = df_filtrado[df_filtrado['codigo'] == codigo_selecionado]
 
-    # --- Conteúdo Principal ---
     st.title("📈 Dashboard Analítico de Vendas")
     st.markdown("---")
 
@@ -145,7 +133,6 @@ if df_original is not None:
             'vlr_total_produto': 'Valor Total'
         }).sort_values(by="Data da Venda", ascending=False)
 
-        # Formatação profissional via st.column_config
         st.dataframe(
             df_display,
             use_container_width=True,
@@ -168,7 +155,6 @@ if df_original is not None:
     cliente_pesquisado = st.text_input("Digite o nome do cliente para uma busca rápida:")
 
     if cliente_pesquisado:
-        # Busca por cliente mais segura com regex=False
         compras_cliente = df_original[df_original['cliente'].str.contains(cliente_pesquisado, case=False, na=False, regex=False)]
 
         if not compras_cliente.empty:
