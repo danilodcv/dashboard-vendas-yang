@@ -10,7 +10,7 @@ import locale
 try:
     locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
 except locale.Error:
-    # Em alguns ambientes de nuvem, a localização pt_BR pode не estar instalada.
+    # Em alguns ambientes de nuvem, a localização pt_BR pode não estar instalada.
     # O app continuará funcionando, mas o calendário pode aparecer em inglês.
     pass
 
@@ -24,29 +24,29 @@ st.set_page_config(
 # --- Funções Auxiliares ---
 def formatar_moeda(valor):
     """Formata um número para o padrão de moeda brasileira (R$ 1.234,56) usando Babel."""
-    if valor is None or math.isnan(valor) or not isinstance(valor, (int, float)):
-        return format_currency(0, 'BRL', locale='pt_BR')
-    return format_currency(valor, 'BRL', locale='pt_BR')
+    if not isinstance(valor, (int, float)) or pd.isna(valor):
+        return format_currency(0, "BRL", locale="pt_BR")
+    return format_currency(valor, "BRL", locale="pt_BR")
 
 def parse_ptbr(x):
     """
     Converte um valor (string no formato pt-BR ou número) para float.
-    Retorna None em caso de falha, tratando caracteres não numéricos.
+    Retorna None em caso de falha para não mascarar erros.
     """
-    if x is None or (isinstance(x, float) and math.isnan(x)):
+    if x is None:
         return None
     if isinstance(x, (int, float)):
         return float(x)
-
+    
     s = str(x).strip()
     if not s:
         return None
-
-    # Remove tudo que não for dígito, vírgula ou hífen (para negativos)
-    s = re.sub(r'[^\d,-]', '', s)
+    
+    # Remove tudo que não for dígito, vírgula, ou hífen
+    s = re.sub(r"[^\d,-]", "", s)
     # Normaliza separadores: remove milhares '.' e troca ',' por '.'
     s = s.replace(".", "").replace(",", ".")
-
+    
     try:
         return float(s)
     except (ValueError, TypeError):
@@ -71,12 +71,13 @@ def carregar_dados():
         df['emissao'] = pd.to_datetime(df['emissao'], dayfirst=True, errors='coerce')
         df.dropna(subset=['emissao'], inplace=True)
 
+        # Garante que as colunas são numéricas após a leitura e preenche falhas com 0
         for col in ['quantidade', 'vlr_unitario', 'vlr_final']:
              if col in df.columns:
-                 df[col].fillna(0, inplace=True)
+                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
 
-        # AJUSTE: O valor total do produto agora é calculado com base no vlr_final.
-        df['vlr_total_produto'] = df.get('quantidade', 0) * df.get('vlr_final', 0)
+        # O valor total do produto é calculado com base no vlr_final.
+        df['vlr_total_produto'] = (df.get('quantidade', 0) * df.get('vlr_final', 0)).round(2)
         
         df['codigo'] = df.get('codigo', '').astype(str)
         return df
