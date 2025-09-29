@@ -19,6 +19,8 @@ def carregar_dados():
     try:
         df = pd.read_excel("vendas.xlsx")
         df['emissao'] = pd.to_datetime(df['emissao'], dayfirst=True, errors='coerce')
+        # Garante que a coluna de valor seja numérica, tratando erros e preenchendo Nulos com 0
+        df['vlr_total_produto'] = pd.to_numeric(df['vlr_total_produto'], errors='coerce').fillna(0)
         df.dropna(subset=['emissao'], inplace=True)
         df['codigo'] = df['codigo'].astype(str)
         return df
@@ -92,7 +94,9 @@ if df_original is not None:
         num_pedidos = df_filtrado['pedido'].nunique() # Conta pedidos únicos
 
         col1, col2 = st.columns(2)
-        col1.metric("Valor Total das Vendas", f"R$ {total_vendas:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        # CORREÇÃO: Lógica de formatação mais robusta para moeda brasileira.
+        valor_formatado = f"R$ {total_vendas:_.2f}".replace('.', ',').replace('_', '.')
+        col1.metric("Valor Total das Vendas", valor_formatado)
         col2.metric("Quantidade de Pedidos", f"{num_pedidos}")
         
         st.markdown("---")
