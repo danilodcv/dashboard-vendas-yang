@@ -90,7 +90,7 @@ if df_original is not None:
     col_logo, col_titulo = st.columns([1, 5])
     with col_logo:
         try:
-            st.image("sua_logo.png", width=120)
+            st.image("sua_logo.png", width=240)
         except Exception:
             pass # Se a logo não for encontrada, não exibe nada.
 
