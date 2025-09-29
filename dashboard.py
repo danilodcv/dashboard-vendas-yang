@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import datetime
 import math
+import re
 from babel.numbers import format_currency
 
 # --- Configuração da Página ---
@@ -14,29 +15,40 @@ st.set_page_config(
 # --- Funções Auxiliares ---
 def formatar_moeda(valor):
     """Formata um número para o padrão de moeda brasileira (R$ 1.234,56) usando Babel."""
+    if valor is None or math.isnan(valor):
+        return format_currency(0, 'BRL', locale='pt_BR')
     return format_currency(valor, 'BRL', locale='pt_BR')
 
 def parse_ptbr(x):
-    """Converte uma string no formato pt-BR para float de forma segura."""
+    """
+    Converte um valor (possivelmente string no formato pt-BR com símbolos) para float.
+    Retorna None em caso de falha para não mascarar erros.
+    """
     if x is None or (isinstance(x, float) and math.isnan(x)):
-        return 0.0
+        return None
     if isinstance(x, (int, float)):
         return float(x)
+    
     s = str(x).strip()
-    if s == "":
-        return 0.0
+    if not s:
+        return None
+    
+    # Remove tudo que não for dígito, vírgula ou sinal de menos
+    s = re.sub(r'[^\d,-]', '', s)
+    # Normaliza separadores: remove milhares '.' e troca ',' por '.'
     s = s.replace(".", "").replace(",", ".")
+    
     try:
         return float(s)
-    except Exception:
-        return 0.0
+    except (ValueError, TypeError):
+        return None
 
 # --- Carregamento e Cache de Dados ---
 @st.cache_data
 def carregar_dados():
     """
     Carrega os dados da planilha usando 'converters' para tratar corretamente os formatos
-    numéricos brasileiros diretamente na leitura.
+    numéricos brasileiros diretamente na leitura, que é a abordagem mais robusta.
     """
     try:
         df = pd.read_excel(
@@ -50,6 +62,11 @@ def carregar_dados():
 
         df['emissao'] = pd.to_datetime(df['emissao'], dayfirst=True, errors='coerce')
         df.dropna(subset=['emissao'], inplace=True)
+
+        # Após a leitura, preenchemos os valores que falharam na conversão (None -> NaN) com 0.
+        for col in ['quantidade', 'vlr_unitario', 'vlr_final']:
+             if col in df.columns:
+                 df[col].fillna(0, inplace=True)
 
         # Recalcula o valor total para garantir consistência
         df['vlr_total_produto'] = df.get('quantidade', 0) * df.get('vlr_unitario', 0)
