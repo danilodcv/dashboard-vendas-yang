@@ -7,8 +7,8 @@ from babel.numbers import format_currency
 
 # --- Configuração da Página ---
 st.set_page_config(
-    page_title="Dashboard de Vendas - YANG Molduras",
-    page_icon="📈",
+    page_title="YANG Molduras - Vendas 2023 a 2025",
+    page_icon="🔎",
     layout="wide"
 )
 
@@ -63,14 +63,11 @@ def carregar_dados():
         df['emissao'] = pd.to_datetime(df['emissao'], dayfirst=True, errors='coerce')
         df.dropna(subset=['emissao'], inplace=True)
 
-        # Após a leitura, preenchemos os valores que falharam na conversão (None -> NaN) com 0.
         for col in ['quantidade', 'vlr_unitario', 'vlr_final']:
              if col in df.columns:
                  df[col].fillna(0, inplace=True)
 
-        # Recalcula o valor total para garantir consistência
         df['vlr_total_produto'] = df.get('quantidade', 0) * df.get('vlr_unitario', 0)
-
         df['codigo'] = df['codigo'].astype(str)
         return df
     except FileNotFoundError:
@@ -84,36 +81,51 @@ df_original = carregar_dados()
 
 # --- Interface Principal ---
 if df_original is not None:
+    # --- Barra Lateral (agora apenas para logo e título) ---
     st.sidebar.title("YANG Molduras")
     try:
         st.sidebar.image("sua_logo.png", use_container_width=True)
     except Exception:
         st.sidebar.warning("Logo não encontrada.")
     
-    st.sidebar.markdown("---")
-    st.sidebar.header("Filtros de Vendas")
+    # --- Conteúdo Principal ---
+    st.title("📈 Dashboard Analítico de Vendas")
+    st.markdown("---")
 
-    todo_periodo = st.sidebar.checkbox("Analisar todo o período", value=True)
+    # --- Filtros no Corpo Principal ---
+    st.subheader("Filtros de Vendas")
     
     min_date = df_original['emissao'].min().date()
     max_date = df_original['emissao'].max().date()
+    lista_codigos = sorted(df_original['codigo'].unique())
+    lista_codigos.insert(0, "Todos os Códigos")
+
+    filt_col1, filt_col2 = st.columns([2, 1])
+
+    with filt_col1:
+        todo_periodo = st.checkbox("Analisar todo o período", value=True)
+        
+        d1, d2 = st.columns(2)
+        data_inicial_input = d1.date_input("Data Inicial", min_date, min_value=min_date, max_value=max_date, disabled=todo_periodo)
+        data_final_input = d2.date_input("Data Final", max_date, min_value=min_date, max_value=max_date, disabled=todo_periodo)
+    
+    with filt_col2:
+        codigo_selecionado = st.selectbox("Código do Produto:", options=lista_codigos, label_visibility="collapsed", key="codigo_select")
+        st.write("Código do Produto:") # Adiciona um label manual acima do selectbox
 
     if todo_periodo:
         data_inicial = min_date
         data_final = max_date
     else:
-        data_inicial = st.sidebar.date_input("Data Inicial", min_date, min_value=min_date, max_value=max_date)
-        data_final = st.sidebar.date_input("Data Final", max_date, min_value=min_date, max_value=max_date)
+        data_inicial = data_inicial_input
+        data_final = data_final_input
 
-    lista_codigos = sorted(df_original['codigo'].unique())
-    lista_codigos.insert(0, "Todos os Códigos")
-    codigo_selecionado = st.sidebar.selectbox("Código do Produto:", options=lista_codigos)
-
+    # --- Aplicação dos Filtros ---
     df_filtrado = df_original.copy()
     
     if not todo_periodo:
         if data_inicial > data_final:
-            st.sidebar.error("A data inicial não pode ser maior que a data final.")
+            st.error("A data inicial não pode ser maior que a data final.")
             st.stop()
         else:
             df_filtrado = df_filtrado[df_filtrado['emissao'].dt.date.between(data_inicial, data_final, inclusive='both')]
@@ -121,7 +133,6 @@ if df_original is not None:
     if codigo_selecionado != "Todos os Códigos":
         df_filtrado = df_filtrado[df_filtrado['codigo'] == codigo_selecionado]
 
-    st.title("📈 Dashboard Analítico de Vendas")
     st.markdown("---")
 
     if df_filtrado.empty:
