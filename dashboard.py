@@ -14,8 +14,9 @@ except locale.Error:
 
 # --- Configuração da Página ---
 st.set_page_config(
-    page_title="YANG Molduras - Vendas 2023 a 2025",
-    page_icon="🔎",
+    page_title="YANG Molduras - Vendas",
+    # Substitua "icone_yang.png" pelo nome do seu arquivo de imagem
+    page_icon="icone_yang.png",
     layout="wide"
 )
 
@@ -29,21 +30,22 @@ def formatar_moeda(valor):
 def parse_ptbr(x):
     """
     Converte um valor (string no formato pt-BR ou número) para float.
-    Retorna None em caso de falha.
+    Retorna None em caso de falha, tratando caracteres não numéricos.
     """
     if x is None or (isinstance(x, float) and math.isnan(x)):
         return None
     if isinstance(x, (int, float)):
         return float(x)
-    
+
     s = str(x).strip()
     if not s:
         return None
-    
-    # Remove símbolos de moeda e espaços, depois normaliza separadores
+
+    # Remove tudo que não for dígito, vírgula ou hífen (para negativos)
     s = re.sub(r'[^\d,-]', '', s)
+    # Normaliza separadores: remove milhares '.' e troca ',' por '.'
     s = s.replace(".", "").replace(",", ".")
-    
+
     try:
         return float(s)
     except (ValueError, TypeError):
@@ -53,7 +55,7 @@ def parse_ptbr(x):
 @st.cache_data
 def carregar_dados():
     """
-    Carrega e processa os dados da planilha.
+    Carrega e processa os dados da planilha usando 'converters' para robustez.
     """
     try:
         df = pd.read_excel(
@@ -87,16 +89,16 @@ df_original = carregar_dados()
 # --- Interface Principal ---
 if df_original is not None:
     # --- Cabeçalho Principal com Logo e Título ---
-    col_logo, col_titulo = st.columns([1, 5])
+    col_logo, col_titulo = st.columns([1, 4])
     with col_logo:
         try:
             st.image("sua_logo.png", width=240)
         except Exception:
-            pass # Se a logo não for encontrada, não exibe nada.
+            pass
 
     with col_titulo:
         st.title("YANG Molduras")
-        st.subheader("Dashboard de Vendas de 2023 a 2025")
+        st.subheader("Dashboard Analítico de Vendas")
     
     st.markdown("---")
 
@@ -105,8 +107,11 @@ if df_original is not None:
     
     min_date = df_original['emissao'].min().date()
     max_date = df_original['emissao'].max().date()
+    
+    # Adiciona "Todos os Códigos" à lista e garante que não haja duplicatas
     lista_codigos = sorted(df_original['codigo'].unique())
-    lista_codigos.insert(0, "Todos os Códigos")
+    if "Todos os Códigos" not in lista_codigos:
+        lista_codigos.insert(0, "Todos os Códigos")
 
     filt_col1, filt_col2 = st.columns([2, 1])
 
@@ -124,7 +129,7 @@ if df_original is not None:
             data_final = date_col2.date_input("Data Final", max_date, min_value=min_date, max_value=max_date)
 
     with filt_col2:
-        codigo_selecionado = st.selectbox("Código do Produto:", options=lista_codigos, label_visibility="visible")
+        codigo_selecionado = st.selectbox("Código do Produto:", options=lista_codigos)
     
     # --- Aplicação dos Filtros ---
     df_filtrado = df_original.copy()
@@ -172,7 +177,7 @@ if df_original is not None:
             hide_index=True,
             column_config={
                 "Data da Venda": st.column_config.DateColumn("Data da Venda", format="DD/MM/YYYY"),
-                "Valor Total": st.column_config.NumberColumn("Valor Total (R$)", format="%.2f")
+                "Valor Total": st.column_config.NumberColumn("Valor Total (R$)", format="R$ %.2f")
             }
         )
 
@@ -192,9 +197,9 @@ if df_original is not None:
                 hide_index=True,
                  column_config={
                     "emissao": st.column_config.DateColumn("Data da Venda", format="DD/MM/YYYY"),
-                    "vlr_total_produto": st.column_config.NumberColumn("Valor Total (R$)", format="%.2f"),
-                    "vlr_unitario": st.column_config.NumberColumn("Valor Unitário (R$)", format="%.2f"),
-                    "vlr_final": st.column_config.NumberColumn("Valor Final (R$)", format="%.2f")
+                    "vlr_total_produto": st.column_config.NumberColumn("Valor Total (R$)", format="R$ %.2f"),
+                    "vlr_unitario": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.2f"),
+                    "vlr_final": st.column_config.NumberColumn("Valor Final (R$)", format="R$ %.2f")
                 }
             )
         else:
