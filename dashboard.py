@@ -20,6 +20,17 @@ def formatar_moeda(valor):
     except (ValueError, TypeError):
         return "R$ 0,00"
 
+def limpar_coluna_numerica(df, nome_coluna):
+    """Converte uma coluna para tipo numérico, tratando separadores brasileiros."""
+    if nome_coluna in df.columns:
+        # Garante que a coluna seja tratada como texto para manipulação
+        df[nome_coluna] = df[nome_coluna].astype(str)
+        # Remove separadores de milhar (ponto) e substitui vírgula decimal por ponto
+        df[nome_coluna] = df[nome_coluna].str.replace('.', '', regex=False).str.replace(',', '.')
+        # Converte para numérico, tratando erros e preenchendo Nulos com 0
+        df[nome_coluna] = pd.to_numeric(df[nome_coluna], errors='coerce').fillna(0)
+    return df
+
 # --- Carregamento e Cache de Dados ---
 @st.cache_data
 def carregar_dados():
@@ -32,16 +43,11 @@ def carregar_dados():
         df.dropna(subset=['emissao'], inplace=True)
         
         # --- Limpeza e Cálculo Robusto do Valor Total ---
-        # 1. Limpa a coluna 'quantidade' para ser numérica
-        df['quantidade'] = pd.to_numeric(df['quantidade'], errors='coerce').fillna(0)
-        
-        # 2. Limpa a coluna 'vlr_unitario', tratando o formato brasileiro (ex: 1.234,56)
-        if 'vlr_unitario' in df.columns and df['vlr_unitario'].dtype == 'object':
-             df['vlr_unitario'] = df['vlr_unitario'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.')
-        df['vlr_unitario'] = pd.to_numeric(df['vlr_unitario'], errors='coerce').fillna(0)
+        df = limpar_coluna_numerica(df, 'quantidade')
+        df = limpar_coluna_numerica(df, 'vlr_unitario')
+        df = limpar_coluna_numerica(df, 'vlr_final')
 
-        # 3. Calcula a coluna 'vlr_total_produto' para garantir a precisão.
-        #    Isso substitui qualquer valor existente, tornando o dashboard mais confiável.
+        # Recalcula a coluna 'vlr_total_produto' para garantir a precisão.
         df['vlr_total_produto'] = df['quantidade'] * df['vlr_unitario']
         
         df['codigo'] = df['codigo'].astype(str)
@@ -153,7 +159,10 @@ if df_original is not None:
 
             if not compras_cliente.empty:
                 st.success(f"🔍 Exibindo compras para clientes contendo '{cliente_pesquisado}':")
-                st.dataframe(compras_cliente, use_container_width=True, hide_index=True)
+                # Vamos formatar a coluna de valor aqui também para consistência
+                compras_cliente_display = compras_cliente.copy()
+                compras_cliente_display['vlr_total_produto'] = compras_cliente_display['vlr_total_produto'].apply(formatar_moeda)
+                st.dataframe(compras_cliente_display, use_container_width=True, hide_index=True)
             else:
                 st.warning("Nenhum cliente encontrado com este nome.")
     else:
