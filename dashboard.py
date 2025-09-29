@@ -95,7 +95,7 @@ if df_original is not None:
 
         col1, col2 = st.columns(2)
         # CORREÇÃO: Lógica de formatação mais robusta para moeda brasileira.
-        valor_formatado = f"R$ {total_vendas:_.2f}".replace('.', ',').replace('_', '.')
+        valor_formatado = f"R$ {total_vendas:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         col1.metric("Valor Total das Vendas", valor_formatado)
         col2.metric("Quantidade de Pedidos", f"{num_pedidos}")
         
