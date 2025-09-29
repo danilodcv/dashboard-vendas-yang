@@ -78,6 +78,7 @@ def carregar_dados():
                 'quantidade': parse_ptbr,
                 'vlr_unitario': parse_ptbr,
                 'vlr_final': parse_ptbr,
+                'vlr_total_produto': parse_ptbr, # Garante a leitura correta da coluna de total
             }
         )
 
@@ -85,12 +86,9 @@ def carregar_dados():
         df.dropna(subset=['emissao'], inplace=True)
 
         # Preenche apenas valores None/NaN com 0 após a conversão
-        for col in ['quantidade', 'vlr_unitario', 'vlr_final']:
+        for col in ['quantidade', 'vlr_unitario', 'vlr_final', 'vlr_total_produto']:
              if col in df.columns:
                  df[col].fillna(0.0, inplace=True)
-
-        # O valor total do produto é calculado com base no vlr_final.
-        df['vlr_total_produto'] = (df.get('quantidade', 0) * df.get('vlr_final', 0)).round(2)
         
         df['codigo'] = df.get('codigo', '').astype(str)
         return df
@@ -102,16 +100,6 @@ def carregar_dados():
         return None
 
 df_original = carregar_dados()
-
-# --- Ferramenta de Debugging ---
-if st.checkbox("Ativar modo de depuração"):
-    st.subheader("Diagnóstico de Dados Carregados")
-    st.write("Amostra dos dados numéricos após a conversão. Verifique se os valores estão corretos.")
-    if df_original is not None:
-        debug_cols = ['quantidade', 'vlr_unitario', 'vlr_final', 'vlr_total_produto']
-        st.dataframe(df_original[debug_cols].head(10))
-    else:
-        st.warning("O DataFrame não foi carregado.")
 
 # --- Interface Principal ---
 if df_original is not None:
