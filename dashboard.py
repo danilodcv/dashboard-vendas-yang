@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import datetime
+from babel.numbers import format_currency
 
 # --- Configuração da Página ---
 st.set_page_config(
@@ -9,59 +10,45 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- Funções Auxiliares ---
-def formatar_moeda(valor):
-    """Formata um número para o padrão de moeda brasileira (R$ 1.234,56)."""
-    try:
-        valor_float = float(valor)
-        # Formata o número com separador de milhar e duas casas decimais
-        valor_formatado_us = f"{valor_float:,.2f}"
-        # Inverte os separadores para o padrão brasileiro
-        valor_formatado_br = valor_formatado_us.replace(",", "X").replace(".", ",").replace("X", ".")
-        return f"R$ {valor_formatado_br}"
-    except (ValueError, TypeError):
-        return "R$ 0,00"
-
 # --- Carregamento e Cache de Dados ---
 @st.cache_data
 def carregar_dados():
     """
-    Carrega, limpa os dados da planilha de forma segura e garante a precisão dos cálculos.
+    Carrega os dados da planilha, aplicando as melhores práticas de conversão de tipos
+    para garantir a integridade dos dados desde o início.
     """
     try:
-        df = pd.read_excel("vendas.xlsx")
+        # Lê o Excel já tratando os formatos numéricos brasileiros
+        df = pd.read_excel(
+            "vendas.xlsx",
+            decimal=',',
+            thousands='.'
+        )
+        
+        # Converte a coluna de data, tratando o formato brasileiro
         df['emissao'] = pd.to_datetime(df['emissao'], dayfirst=True, errors='coerce')
         df.dropna(subset=['emissao'], inplace=True)
         
-        # --- Limpeza Robusta e Inteligente das Colunas de Valor ---
+        # Garante que as colunas de valor sejam numéricas, preenchendo erros/nulos com 0
         colunas_valor = ['quantidade', 'vlr_unitario', 'vlr_final']
         for coluna in colunas_valor:
             if coluna in df.columns:
-                # 1. VERIFICA se a coluna JÁ É numérica. Se for, não faz nada.
-                if pd.api.types.is_numeric_dtype(df[coluna]):
-                    # Apenas preenche valores nulos com 0 para segurança
-                    df[coluna] = df[coluna].fillna(0)
-                    continue # Pula para a próxima coluna
-
-                # 2. Se for TEXTO (object), aplica a limpeza para o formato brasileiro.
-                # Converte para string para garantir que os métodos de string funcionem
-                df[coluna] = df[coluna].astype(str)
-                # Remove o separador de milhar (ponto) e troca a vírgula decimal por ponto
-                df[coluna] = df[coluna].str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-                
-                # 3. Converte para numérico, tratando erros e preenchendo Nulos com 0
                 df[coluna] = pd.to_numeric(df[coluna], errors='coerce').fillna(0)
 
-        # 4. Recalcula a coluna 'vlr_total_produto' para garantir a precisão.
-        df['vlr_total_produto'] = df['quantidade'] * df['vlr_unitario']
-        
+        # Recalcula o valor total para garantir consistência
+        if 'quantidade' in df.columns and 'vlr_unitario' in df.columns:
+            df['vlr_total_produto'] = df['quantidade'] * df['vlr_unitario']
+        else:
+            # Fallback caso uma das colunas não exista, evita que o app quebre
+            df['vlr_total_produto'] = 0
+            
         df['codigo'] = df['codigo'].astype(str)
         return df
     except FileNotFoundError:
         st.error("Arquivo 'vendas.xlsx' não encontrado. Verifique se ele está na pasta do projeto.")
         return None
     except Exception as e:
-        st.error(f"Erro ao carregar a planilha: {e}")
+        st.error(f"Erro ao carregar ou processar a planilha: {e}")
         return None
 
 df_original = carregar_dados()
@@ -98,15 +85,17 @@ if df_original is not None:
 
     # --- Aplicação dos Filtros ---
     df_filtrado = df_original.copy()
-
+    
+    # Aplica filtro de data de forma mais robusta
     if not todo_periodo:
         if data_inicial > data_final:
             st.sidebar.error("A data inicial não pode ser maior que a data final.")
             st.stop()
         else:
             data_inicial_ts = pd.to_datetime(data_inicial)
-            data_final_ts = pd.to_datetime(data_final)
-            df_filtrado = df_filtrado[(df_filtrado['emissao'] >= data_inicial_ts) & (df_filtrado['emissao'] <= data_final_ts)]
+            # Adiciona um dia à data final para incluir todas as horas do último dia
+            data_final_ts = pd.to_datetime(data_final) + datetime.timedelta(days=1)
+            df_filtrado = df_filtrado[df_filtrado['emissao'].between(data_inicial_ts, data_final_ts, inclusive='left')]
 
     if codigo_selecionado != "Todos os Códigos":
         df_filtrado = df_filtrado[df_filtrado['codigo'] == codigo_selecionado]
@@ -124,7 +113,8 @@ if df_original is not None:
 
         col1, col2 = st.columns(2)
         
-        col1.metric("Valor Total das Vendas", formatar_moeda(total_vendas))
+        # Usando Babel para formatação de moeda confiável
+        col1.metric("Valor Total das Vendas", format_currency(total_vendas, 'BRL', locale='pt_BR'))
         col2.metric("Quantidade de Pedidos", f"{num_pedidos}")
         
         st.markdown("---")
@@ -132,44 +122,53 @@ if df_original is not None:
         st.subheader("Detalhes das Vendas")
         
         colunas_mostrar = ['pedido', 'emissao', 'cliente', 'codigo', 'produto', 'vlr_total_produto']
-        colunas_existentes = [col for col in colunas_mostrar if col in df_filtrado.columns]
-
-        df_ordenado = df_filtrado.sort_values(by="emissao", ascending=False)
-        
-        df_display = df_ordenado[colunas_existentes].rename(columns={
+        df_display = df_filtrado[colunas_mostrar].rename(columns={
             'pedido': 'Nº Pedido',
             'emissao': 'Data da Venda',
             'cliente': 'Cliente',
             'codigo': 'Código',
             'produto': 'Produto',
             'vlr_total_produto': 'Valor Total'
-        })
-        
-        df_display['Data da Venda'] = df_display['Data da Venda'].dt.strftime('%d/%m/%Y')
-        
-        df_display['Valor Total'] = df_display['Valor Total'].apply(formatar_moeda)
+        }).sort_values(by="Data da Venda", ascending=False)
 
-        st.dataframe(df_display, use_container_width=True, hide_index=True)
+        # Formatação profissional via st.column_config
+        st.dataframe(
+            df_display,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Data da Venda": st.column_config.DateColumn(
+                    "Data da Venda",
+                    format="DD/MM/YYYY"
+                ),
+                "Valor Total": st.column_config.NumberColumn(
+                    "Valor Total (R$)",
+                    format="%.2f"
+                )
+            }
+        )
 
     st.markdown("\n\n---\n\n")
 
     st.subheader("Consulta Rápida por Cliente")
-    NOME_DA_COLUNA_CLIENTES = 'cliente'
+    cliente_pesquisado = st.text_input("Digite o nome do cliente para uma busca rápida:")
 
-    if NOME_DA_COLUNA_CLIENTES in df_original.columns:
-        cliente_pesquisado = st.text_input("Digite o nome do cliente para uma busca rápida:")
+    if cliente_pesquisado:
+        # Busca por cliente mais segura com regex=False
+        compras_cliente = df_original[df_original['cliente'].str.contains(cliente_pesquisado, case=False, na=False, regex=False)]
 
-        if cliente_pesquisado:
-            compras_cliente = df_original[df_original[NOME_DA_COLUNA_CLIENTES].str.contains(cliente_pesquisado, case=False, na=False)]
-
-            if not compras_cliente.empty:
-                st.success(f"🔍 Exibindo compras para clientes contendo '{cliente_pesquisado}':")
-                # Vamos formatar a coluna de valor aqui também para consistência
-                compras_cliente_display = compras_cliente.copy()
-                compras_cliente_display['vlr_total_produto'] = compras_cliente_display['vlr_total_produto'].apply(formatar_moeda)
-                st.dataframe(compras_cliente_display, use_container_width=True, hide_index=True)
-            else:
-                st.warning("Nenhum cliente encontrado com este nome.")
-    else:
-        st.error(f"A coluna '{NOME_DA_COLUNA_CLIENTES}' não foi encontrada na planilha.")
+        if not compras_cliente.empty:
+            st.success(f"🔍 Exibindo compras para clientes contendo '{cliente_pesquisado}':")
+            compras_cliente_display = compras_cliente.copy()
+            st.dataframe(
+                compras_cliente_display,
+                use_container_width=True,
+                hide_index=True,
+                 column_config={
+                    "emissao": st.column_config.DateColumn("Data da Venda", format="DD/MM/YYYY"),
+                    "vlr_total_produto": st.column_config.NumberColumn("Valor Total (R$)", format="%.2f")
+                }
+            )
+        else:
+            st.warning("Nenhum cliente encontrado com este nome.")
 
