@@ -7,11 +7,12 @@ from babel.numbers import format_currency
 import locale
 
 # --- Configuração de Localização para Português-Brasil ---
-# Isso garante que componentes como o calendário usem o idioma correto.
+# Tenta configurar o locale, mas não impede a execução se não encontrar.
 try:
     locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
 except locale.Error:
-    st.warning("Localização 'pt_BR.UTF-8' não encontrada. O calendário pode aparecer em inglês.")
+    # Este warning é útil, mas a formatação principal será feita via código.
+    st.sidebar.info("Aviso: O calendário do seletor de data pode aparecer em inglês no ambiente da nuvem.")
 
 # --- Configuração da Página ---
 st.set_page_config(
@@ -106,33 +107,39 @@ if df_original is not None:
     lista_codigos = sorted(df_original['codigo'].unique())
     lista_codigos.insert(0, "Todos os Códigos")
 
-    filt_col1, filt_col2, filt_col3 = st.columns([1, 1, 1])
+    filt_col1, filt_col2 = st.columns([2, 1])
 
     with filt_col1:
+        # Coluna para os seletores de data
+        date_col1, date_col2 = st.columns(2)
         todo_periodo = st.checkbox("Analisar todo o período", value=True)
+        
         if todo_periodo:
             data_inicial = min_date
             data_final = max_date
+            # Usamos widgets desabilitados para manter o alinhamento
+            date_col1.date_input("Data Inicial", min_date, disabled=True)
+            date_col2.date_input("Data Final", max_date, disabled=True)
         else:
-            data_inicial = st.date_input("Data Inicial", min_date, min_value=min_date, max_value=max_date)
-            
-    with filt_col2:
-        if not todo_periodo:
-            data_final = st.date_input("Data Final", max_date, min_value=min_date, max_value=max_date)
+            data_inicial = date_col1.date_input("Data Inicial", min_date, min_value=min_date, max_value=max_date)
+            data_final = date_col2.date_input("Data Final", max_date, min_value=min_date, max_value=max_date)
 
-    with filt_col3:
-        codigo_selecionado = st.selectbox("Código do Produto:", options=lista_codigos)
+    with filt_col2:
+        codigo_selecionado = st.selectbox("Código do Produto:", options=lista_codigos, label_visibility="visible")
     
     # --- Aplicação dos Filtros ---
     df_filtrado = df_original.copy()
     
+    # O filtro de data só é aplicado se a caixa não estiver marcada
     if not todo_periodo:
         if data_inicial > data_final:
             st.error("A data inicial não pode ser maior que a data final.")
             st.stop()
         else:
+            # Filtra pelo intervalo de datas
             df_filtrado = df_filtrado[df_filtrado['emissao'].dt.date.between(data_inicial, data_final, inclusive='both')]
 
+    # Filtra por código se um código específico for selecionado
     if codigo_selecionado != "Todos os Códigos":
         df_filtrado = df_filtrado[df_filtrado['codigo'] == codigo_selecionado]
 
