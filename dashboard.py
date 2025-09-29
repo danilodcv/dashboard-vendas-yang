@@ -7,6 +7,7 @@ from babel.numbers import format_currency
 import locale
 
 # --- Configuração de Localização para Português-Brasil ---
+# Isso garante que componentes como o calendário usem o idioma correto.
 try:
     locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
 except locale.Error:
@@ -14,7 +15,7 @@ except locale.Error:
 
 # --- Configuração da Página ---
 st.set_page_config(
-    page_title="YANG Molduras - Vendas 2023 a 2025",
+    page_title="YANG Molduras - Vendas",
     page_icon="🔎",
     layout="wide"
 )
@@ -22,14 +23,14 @@ st.set_page_config(
 # --- Funções Auxiliares ---
 def formatar_moeda(valor):
     """Formata um número para o padrão de moeda brasileira (R$ 1.234,56) usando Babel."""
-    if valor is None or math.isnan(valor):
+    if valor is None or math.isnan(valor) or not isinstance(valor, (int, float)):
         return format_currency(0, 'BRL', locale='pt_BR')
     return format_currency(valor, 'BRL', locale='pt_BR')
 
 def parse_ptbr(x):
     """
-    Converte um valor (possivelmente string no formato pt-BR com símbolos) para float.
-    Retorna None em caso de falha para não mascarar erros.
+    Converte um valor (string no formato pt-BR ou número) para float.
+    Retorna None em caso de falha.
     """
     if x is None or (isinstance(x, float) and math.isnan(x)):
         return None
@@ -40,9 +41,8 @@ def parse_ptbr(x):
     if not s:
         return None
     
-    # Remove tudo que não for dígito, vírgula ou sinal de menos
+    # Remove símbolos de moeda e espaços, depois normaliza separadores
     s = re.sub(r'[^\d,-]', '', s)
-    # Normaliza separadores: remove milhares '.' e troca ',' por '.'
     s = s.replace(".", "").replace(",", ".")
     
     try:
@@ -54,8 +54,7 @@ def parse_ptbr(x):
 @st.cache_data
 def carregar_dados():
     """
-    Carrega os dados da planilha usando 'converters' para tratar corretamente os formatos
-    numéricos brasileiros diretamente na leitura, que é a abordagem mais robusta.
+    Carrega e processa os dados da planilha.
     """
     try:
         df = pd.read_excel(
@@ -75,7 +74,7 @@ def carregar_dados():
                  df[col].fillna(0, inplace=True)
 
         df['vlr_total_produto'] = df.get('quantidade', 0) * df.get('vlr_unitario', 0)
-        df['codigo'] = df['codigo'].astype(str)
+        df['codigo'] = df.get('codigo', '').astype(str)
         return df
     except FileNotFoundError:
         st.error("Arquivo 'vendas.xlsx' não encontrado. Verifique se ele está na pasta do projeto.")
@@ -88,7 +87,7 @@ df_original = carregar_dados()
 
 # --- Interface Principal ---
 if df_original is not None:
-    # --- Barra Lateral (agora apenas para logo e título) ---
+    # --- Barra Lateral ---
     st.sidebar.title("YANG Molduras")
     try:
         st.sidebar.image("sua_logo.png", use_container_width=True)
@@ -107,25 +106,23 @@ if df_original is not None:
     lista_codigos = sorted(df_original['codigo'].unique())
     lista_codigos.insert(0, "Todos os Códigos")
 
-    filt_col1, filt_col2 = st.columns([2, 1])
+    filt_col1, filt_col2, filt_col3 = st.columns([1, 1, 1])
 
     with filt_col1:
         todo_periodo = st.checkbox("Analisar todo o período", value=True)
-        
-        d1, d2 = st.columns(2)
-        data_inicial_input = d1.date_input("Data Inicial", min_date, min_value=min_date, max_value=max_date, disabled=todo_periodo)
-        data_final_input = d2.date_input("Data Final", max_date, min_value=min_date, max_value=max_date, disabled=todo_periodo)
-    
+        if todo_periodo:
+            data_inicial = min_date
+            data_final = max_date
+        else:
+            data_inicial = st.date_input("Data Inicial", min_date, min_value=min_date, max_value=max_date)
+            
     with filt_col2:
+        if not todo_periodo:
+            data_final = st.date_input("Data Final", max_date, min_value=min_date, max_value=max_date)
+
+    with filt_col3:
         codigo_selecionado = st.selectbox("Código do Produto:", options=lista_codigos)
-
-    if todo_periodo:
-        data_inicial = min_date
-        data_final = max_date
-    else:
-        data_inicial = data_inicial_input
-        data_final = data_final_input
-
+    
     # --- Aplicação dos Filtros ---
     df_filtrado = df_original.copy()
     
@@ -149,7 +146,6 @@ if df_original is not None:
         num_pedidos = df_filtrado['pedido'].nunique()
 
         col1, col2 = st.columns(2)
-        
         col1.metric("Valor Total das Vendas", formatar_moeda(total_vendas))
         col2.metric("Quantidade de Pedidos", f"{num_pedidos}")
         
@@ -172,14 +168,8 @@ if df_original is not None:
             use_container_width=True,
             hide_index=True,
             column_config={
-                "Data da Venda": st.column_config.DateColumn(
-                    "Data da Venda",
-                    format="DD/MM/YYYY"
-                ),
-                "Valor Total": st.column_config.NumberColumn(
-                    "Valor Total (R$)",
-                    format="%.2f"
-                )
+                "Data da Venda": st.column_config.DateColumn("Data da Venda", format="DD/MM/YYYY"),
+                "Valor Total": st.column_config.NumberColumn("Valor Total (R$)", format="%.2f")
             }
         )
 
