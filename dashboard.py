@@ -35,7 +35,7 @@ df = carregar_dados()
 
 if df is not None:
     # --- Barra Lateral com Logo e Nome da Empresa ---
-    st.sidebar.title("YANG Molduras")
+    st.sidebar.title("YANG")
     try:
         # IMPORTANTE: Substitua "sua_logo.png" pelo nome do seu arquivo de imagem.
         # O arquivo da logo deve estar na mesma pasta do script.
@@ -48,7 +48,7 @@ if df is not None:
 
 
     # --- Conteúdo Principal ---
-    st.title("📊 Consulta de Vendas - YANG Molduras")
+    st.title("📊 Consulta de Vendas - de 2023 a 2025")
     st.markdown("---")
 
     # --- Lógica de Filtragem ---
@@ -57,7 +57,7 @@ if df is not None:
     if NOME_DA_COLUNA_CLIENTES not in df.columns:
         st.error(f"Erro Crítico: A coluna '{NOME_DA_COLUNA_CLIENTES}' não foi encontrada na planilha. Por favor, ajuste o nome da coluna no seu arquivo .xlsx ou no código.")
     else:
-        cliente_pesquisado = st.text_input("Digite o nome do cliente para consultar:")
+        cliente_pesquisado = st.text_input("Nome do Cliente:")
 
         if cliente_pesquisado:
             compras_cliente = df[df[NOME_DA_COLUNA_CLIENTES].str.contains(cliente_pesquisado, case=False, na=False)]
