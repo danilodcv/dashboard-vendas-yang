@@ -13,11 +13,8 @@ st.set_page_config(
 def formatar_moeda(valor):
     """Formata um número para o padrão de moeda brasileira (R$ 1.234,56)."""
     try:
-        # Formata o número com 2 casas decimais, garantindo que seja um float
         valor_float = float(valor)
-        # Usa uma formatação que separa milhares com vírgula e decimal com ponto (padrão US)
         valor_formatado_us = f"{valor_float:,.2f}"
-        # Inverte os separadores para o padrão brasileiro
         valor_formatado_br = valor_formatado_us.replace(",", "X").replace(".", ",").replace("X", ".")
         return f"R$ {valor_formatado_br}"
     except (ValueError, TypeError):
@@ -27,20 +24,26 @@ def formatar_moeda(valor):
 @st.cache_data
 def carregar_dados():
     """
-    Carrega e prepara os dados da planilha.
-    Esta função é executada apenas uma vez e o resultado fica em cache.
+    Carrega os dados e calcula o valor total do produto para garantir a precisão.
     """
     try:
         df = pd.read_excel("vendas.xlsx")
         df['emissao'] = pd.to_datetime(df['emissao'], dayfirst=True, errors='coerce')
-        
-        # Trata a coluna de valor para o formato numérico correto
-        if 'vlr_total_produto' in df.columns and df['vlr_total_produto'].dtype == 'object':
-             df['vlr_total_produto'] = df['vlr_total_produto'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.')
-
-        df['vlr_total_produto'] = pd.to_numeric(df['vlr_total_produto'], errors='coerce').fillna(0)
-        
         df.dropna(subset=['emissao'], inplace=True)
+        
+        # --- Limpeza e Cálculo Robusto do Valor Total ---
+        # 1. Limpa a coluna 'quantidade' para ser numérica
+        df['quantidade'] = pd.to_numeric(df['quantidade'], errors='coerce').fillna(0)
+        
+        # 2. Limpa a coluna 'vlr_unitario', tratando o formato brasileiro (ex: 1.234,56)
+        if 'vlr_unitario' in df.columns and df['vlr_unitario'].dtype == 'object':
+             df['vlr_unitario'] = df['vlr_unitario'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.')
+        df['vlr_unitario'] = pd.to_numeric(df['vlr_unitario'], errors='coerce').fillna(0)
+
+        # 3. Calcula a coluna 'vlr_total_produto' para garantir a precisão.
+        #    Isso substitui qualquer valor existente, tornando o dashboard mais confiável.
+        df['vlr_total_produto'] = df['quantidade'] * df['vlr_unitario']
+        
         df['codigo'] = df['codigo'].astype(str)
         return df
     except FileNotFoundError:
