@@ -4,6 +4,13 @@ import datetime
 import math
 import re
 from babel.numbers import format_currency
+import locale
+
+# --- Configuração de Localização para Português-Brasil ---
+try:
+    locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
+except locale.Error:
+    st.warning("Localização 'pt_BR.UTF-8' não encontrada. O calendário pode aparecer em inglês.")
 
 # --- Configuração da Página ---
 st.set_page_config(
@@ -110,8 +117,7 @@ if df_original is not None:
         data_final_input = d2.date_input("Data Final", max_date, min_value=min_date, max_value=max_date, disabled=todo_periodo)
     
     with filt_col2:
-        codigo_selecionado = st.selectbox("Código do Produto:", options=lista_codigos, label_visibility="collapsed", key="codigo_select")
-        st.write("Código do Produto:") # Adiciona um label manual acima do selectbox
+        codigo_selecionado = st.selectbox("Código do Produto:", options=lista_codigos)
 
     if todo_periodo:
         data_inicial = min_date
