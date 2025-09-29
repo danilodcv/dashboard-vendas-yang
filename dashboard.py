@@ -10,12 +10,13 @@ import locale
 try:
     locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
 except locale.Error:
-    pass # Não mostra aviso, pois a formatação principal é feita via código.
+    # Em alguns ambientes de nuvem, a localização pt_BR pode не estar instalada.
+    # O app continuará funcionando, mas o calendário pode aparecer em inglês.
+    pass
 
 # --- Configuração da Página ---
 st.set_page_config(
     page_title="YANG Molduras - Vendas",
-    # Substitua "icone_yang.png" pelo nome do seu arquivo de imagem
     page_icon="icone_yang.png",
     layout="wide"
 )
@@ -74,7 +75,9 @@ def carregar_dados():
              if col in df.columns:
                  df[col].fillna(0, inplace=True)
 
-        df['vlr_total_produto'] = df.get('quantidade', 0) * df.get('vlr_unitario', 0)
+        # AJUSTE: O valor total do produto agora é calculado com base no vlr_final.
+        df['vlr_total_produto'] = df.get('quantidade', 0) * df.get('vlr_final', 0)
+        
         df['codigo'] = df.get('codigo', '').astype(str)
         return df
     except FileNotFoundError:
@@ -108,7 +111,6 @@ if df_original is not None:
     min_date = df_original['emissao'].min().date()
     max_date = df_original['emissao'].max().date()
     
-    # Adiciona "Todos os Códigos" à lista e garante que não haja duplicatas
     lista_codigos = sorted(df_original['codigo'].unique())
     if "Todos os Códigos" not in lista_codigos:
         lista_codigos.insert(0, "Todos os Códigos")
