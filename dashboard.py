@@ -114,6 +114,7 @@ if df_original is not None:
     with col_titulo:
         st.title("YANG Molduras")
         st.subheader("Dashboard de Vendas - 2023 a 2025")
+        st.subheader("Dados do sistema MGNET")
     
     st.markdown("---")
 
