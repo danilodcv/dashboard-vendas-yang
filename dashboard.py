@@ -7,16 +7,14 @@ from babel.numbers import format_currency
 import locale
 
 # --- Configuração de Localização para Português-Brasil ---
-# Tenta configurar o locale, mas não impede a execução se não encontrar.
 try:
     locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
 except locale.Error:
-    # Este warning é útil, mas a formatação principal será feita via código.
-    st.sidebar.info("Aviso: O calendário do seletor de data pode aparecer em inglês no ambiente da nuvem.")
+    pass # Não mostra aviso, pois a formatação principal é feita via código.
 
 # --- Configuração da Página ---
 st.set_page_config(
-    page_title="YANG Molduras - Vendas",
+    page_title="YANG Molduras - Vendas 2023 a 2025",
     page_icon="🔎",
     layout="wide"
 )
@@ -88,15 +86,18 @@ df_original = carregar_dados()
 
 # --- Interface Principal ---
 if df_original is not None:
-    # --- Barra Lateral ---
-    st.sidebar.title("YANG Molduras")
-    try:
-        st.sidebar.image("sua_logo.png", use_container_width=True)
-    except Exception:
-        st.sidebar.warning("Logo não encontrada.")
+    # --- Cabeçalho Principal com Logo e Título ---
+    col_logo, col_titulo = st.columns([1, 5])
+    with col_logo:
+        try:
+            st.image("sua_logo.png", width=120)
+        except Exception:
+            pass # Se a logo não for encontrada, não exibe nada.
+
+    with col_titulo:
+        st.title("YANG Molduras")
+        st.subheader("Dashboard de Vendas de 2023 a 2025")
     
-    # --- Conteúdo Principal ---
-    st.title("📈 Dashboard Analítico de Vendas")
     st.markdown("---")
 
     # --- Filtros no Corpo Principal ---
@@ -110,14 +111,12 @@ if df_original is not None:
     filt_col1, filt_col2 = st.columns([2, 1])
 
     with filt_col1:
-        # Coluna para os seletores de data
         date_col1, date_col2 = st.columns(2)
         todo_periodo = st.checkbox("Analisar todo o período", value=True)
         
         if todo_periodo:
             data_inicial = min_date
             data_final = max_date
-            # Usamos widgets desabilitados para manter o alinhamento
             date_col1.date_input("Data Inicial", min_date, disabled=True)
             date_col2.date_input("Data Final", max_date, disabled=True)
         else:
@@ -130,16 +129,13 @@ if df_original is not None:
     # --- Aplicação dos Filtros ---
     df_filtrado = df_original.copy()
     
-    # O filtro de data só é aplicado se a caixa não estiver marcada
     if not todo_periodo:
         if data_inicial > data_final:
             st.error("A data inicial não pode ser maior que a data final.")
             st.stop()
         else:
-            # Filtra pelo intervalo de datas
             df_filtrado = df_filtrado[df_filtrado['emissao'].dt.date.between(data_inicial, data_final, inclusive='both')]
 
-    # Filtra por código se um código específico for selecionado
     if codigo_selecionado != "Todos os Códigos":
         df_filtrado = df_filtrado[df_filtrado['codigo'] == codigo_selecionado]
 
